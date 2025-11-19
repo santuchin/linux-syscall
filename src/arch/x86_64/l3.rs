@@ -117,16 +117,16 @@ impl FileDesc {
 		&self,
 	) -> Result<(Self, libc::sockaddr), Error> {
 
-		let endpoint = libc::sockaddr {
-			sa_family: AddressFamily::IPV6,
+		let mut endpoint = libc::sockaddr {
+			sa_family: AddressFamily::IPV6 as _,
 			sa_data: [0; 14],
 		};
-		let length = core::mem::size_of_val(&endpoint);
+		let mut length = core::mem::size_of_val(&endpoint);
 
 		unsafe {
 			l2::accept(
 				self.raw,
-				endpoint as *mut libc::sockaddr,
+				&mut endpoint,
 				&mut length,
 			).catch()
 		}.map(|value| (Self { raw: value as _}, endpoint))
