@@ -14,6 +14,7 @@ use libc::{
 	ssize_t
 };
 
+pub use std::os::fd::RawFd;
 
 macro_rules! catch {
 	($error:expr, $valid:expr) => {
@@ -23,8 +24,11 @@ macro_rules! catch {
 
 
 
+
+
+
 pub unsafe fn read<T>(
-	file: int,
+	file_desc: RawFd,
 	buffer: *mut T,
 	size: size_t,
 ) -> ssize_t {
@@ -39,7 +43,7 @@ pub unsafe fn read<T>(
 }
 
 pub unsafe fn write<T>(
-	file: int,
+	file: RawFd,
 	data: *const T,
 	length: size_t,
 ) -> ssize_t {
@@ -53,43 +57,12 @@ pub unsafe fn write<T>(
 	}
 }
 
-/*
-#[deprecated(note = "discouraged, use openat instead")]
-pub fn open(
-	path: *const char,
-	options: OpenOptions,
-) -> Result<int, Error> {
-
-	let value = unsafe {
-		syscall!(
-			sys::OPEN,
-			options.flags,
-			options.mode
-		)
-	};
-
-	if let ERROR_RESERVED..0 = value {
-		Err(-value as _)
-	} else {
-		Ok(value as _)
-	}
-}
-*/
-
-pub unsafe fn close(file: int) -> int {
+pub unsafe fn close(file: RawFd) -> int {
 	unsafe { syscall!( sys::CLOSE, file) }
 }
 
 pub fn getpid() -> int {
 	unsafe { syscall!(sys::GETPID) }
-}
-
-pub unsafe fn socket(
-	domain: int,
-	r#type: int,
-	protocol: int,
-) -> int {
-	unsafe { syscall!(sys::SOCKET, domain, r#type, protocol) }
 }
 
 pub fn exit(status: int) -> ! {

@@ -10,7 +10,7 @@ use core::pin::Pin;
 
 use crate::l1;
 use crate::l1::{
-	sys
+	Sys
 };
 
 use libc::{
@@ -79,10 +79,20 @@ where
 
 pub use would_block;
 
+/*
+#[repr(u16)]
+pub enum Error {
+	Perm = 1,
+	NoEnt = 2,
+	Search = 3,
+	Interrupt = 4,
+	Again = 11,
+}
+*/
 
 #[derive(Debug, PartialEq)]
 pub struct Error {
-	value: u16
+	value: u16,
 }
 
 impl Error {
@@ -174,7 +184,7 @@ impl File {
 
 		let value = unsafe {
 			syscall!(
-				sys::SOCKET,
+				Sys::Socket,
 				family as int,
 				semantic,
 				0 as int,
@@ -196,7 +206,7 @@ impl File {
 
 		let value = unsafe {
 			syscall!(
-				sys::SETSOCKOPT,
+				Sys::SetSocketOption,
 				self.desc,
 				level as int,
 				name as int,
@@ -218,7 +228,7 @@ impl File {
 
 		let value = unsafe {
 			syscall!(
-				sys::BIND,
+				Sys::Bind,
 				self.desc,
 				endpoint,
 				core::mem::size_of_val(endpoint),
@@ -245,7 +255,7 @@ impl File {
 
 		let value = unsafe {
 			syscall!(
-				sys::ACCEPT,
+				Sys::Accept,
 				self.desc,
 				endpoint,
 				&mut length,
@@ -270,7 +280,7 @@ impl File {
 
 		let value = unsafe {
 			syscall!(
-				sys::ACCEPT,
+				Sys::Accept,
 				self.desc,
 				&mut endpoint,
 				&mut length,
@@ -296,7 +306,7 @@ impl File {
 
 		let value = unsafe {
 			syscall!(
-				sys::LISTEN,
+				Sys::Listen,
 				self.desc,
 				backlog,
 			)
@@ -312,7 +322,7 @@ impl File {
 
 		let value = unsafe {
 				syscall!(
-				sys::SHUTDOWN,
+				Sys::Shutdown,
 				how as int,
 			)
 		};
@@ -331,7 +341,7 @@ impl File {
 		
 		let value = unsafe {
 			syscall!(
-				sys::OPENAT2,
+				Sys::OpenAt2,
 				directory.desc,
 				path,
 				how,
@@ -349,7 +359,7 @@ impl File {
 	
 		unsafe {
 			syscall!(
-				sys::READ,
+				Sys::Read,
 				self.desc,
 				buffer.as_mut_ptr(),
 				buffer.len(),
@@ -361,7 +371,7 @@ impl File {
 
 		unsafe {
 			syscall!(
-				sys::WRITE,
+				Sys::Write,
 				self.desc,
 				data.as_ptr(),
 				data.len(),
@@ -405,7 +415,7 @@ impl Drop for File {
 	fn drop(&mut self) {
 		let _ = unsafe {
 			syscall!(
-				sys::CLOSE,
+				Sys::Close,
 				self.desc,
 			)
 		};
@@ -420,11 +430,11 @@ static CWD: File = File { desc: -100 };
 
 
 pub fn get_pid() -> long {
-	unsafe { l1::syscall!(sys::GETPID) }
+	unsafe { l1::syscall!(Sys::GetProcessId) }
 }
 
 pub fn exit(status: u8) -> ! {
-	unsafe { l1::syscall!(sys::EXIT, status as int) };
+	unsafe { l1::syscall!(Sys::Exit, status as int) };
 	unsafe { core::hint::unreachable_unchecked() }
 }
 

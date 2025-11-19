@@ -1,4 +1,5 @@
 
+use core::ffi::c_long as CLong;
 
 #[macro_export] macro_rules! syscall {
 
@@ -28,24 +29,29 @@
 		$(,)?
 	) => {
 		{
-			let value: libc::c_long;
+			use core::ffi::c_long;
+
+			let value: c_long;
 
 			core::arch::asm!(
 				"syscall",
 				
-				in("rax") $number,
+				in("rax") ($number) as c_long,
 				
-				$(in("rdi") $a,
-				$(in("rsi") $b,
-				$(in("rdx") $c,
-				$(in("r10") $d,
-				$(in("r8")  $e,
-				$(in("r9")  $f,
+				$(in("rdi") ($a),
+				$(in("rsi") ($b),
+				$(in("rdx") ($c),
+				$(in("r10") ($d),
+				$(in("r8")  ($e),
+				$(in("r9")  ($f),
 				)?)?)?)?)?)?
 
 				lateout("rax") value,
 				lateout("rcx") _,
 				lateout("r11") _,
+
+				clobber_abi("sysv64"),
+				options(nostack),
 			);
 
 			value
@@ -55,35 +61,35 @@
 
 pub use syscall;
 
-pub const ERROR_RESERVED: libc::c_long = -4095;
 
-pub mod sys {
-	use core::ffi::c_long as long;
 
-	pub const READ: long = libc::SYS_read;
-	pub const WRITE: long = 1;
-	pub const OPEN: long = 2;
-	pub const CLOSE: long = 3;
 
-	pub const GETPID: long = 39;
 
-	pub const SOCKET: long = 41;
 
-	pub const SETSOCKOPT: long = libc::SYS_setsockopt;
-	pub const SHUTDOWN: long = libc::SYS_shutdown;
 
-	pub const ACCEPT: long = 43;
+pub const MAX_ERROR: libc::c_long = -0xfff;
 
-	pub const BIND: long = 49;
-	pub const LISTEN: long = 50;
 
-	pub const EXIT: long = 60;
 
-	pub const IO_URING_SETUP: long = 425;
-	pub const IO_URING_ENTER: long = 426;
-	pub const IO_URING_REGISTER: long = 427;
 
-	pub const OPENAT2: long = 437;
 
-	// pub const : long = ;
+
+#[repr(i64)]
+pub enum Sys {
+	Read = 0,
+	Write = 1,
+	Open = 2,
+	Close = 3,
+	GetProcessId = 39,
+	Socket = 41,
+	SetSocketOption = libc::SYS_setsockopt,
+	Shutdown = libc::SYS_shutdown,
+	Accept = 43,
+	Bind = 49,
+	Listen = 50,
+	Exit = 60,
+	IoUringSetup = 425,
+	IoUringEnter = 426,
+	IoUringRegister = 427,
+	OpenAt2 = 437,
 }

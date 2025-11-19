@@ -1,7 +1,6 @@
-#![allow(unused)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
+
+#![allow(warnings)]
+#[cfg(test)] mod tests;
 
 pub mod arch;
 
@@ -12,6 +11,3 @@ compile_error!("linux-syscalls only supports Linux");
 */
 
 pub use arch::current::*;
-
-
-#[cfg(test)] mod tests;
