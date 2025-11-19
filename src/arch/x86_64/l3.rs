@@ -1,464 +1,139 @@
 
-use std::os::raw::c_void;
+pub use std::ffi::CStr;
+use std::ffi::c_int;
 
-use core::task::{
-	Poll,
-	Context,
-};
-
-use core::pin::Pin;
-
-use crate::l1;
-use crate::l1::{
-	Sys
-};
-
-use libc::{
-	c_int as int, c_long as long, c_uint as uint, c_void as void, in6_addr, in_port_t, off_t, sa_family_t, socklen_t
-};
+use crate::l2::{self, open};
+use crate::result::Error;
+pub use crate::types::*;
 
 
-
-
-
-
-macro_rules! syscall {
-	(
-		$number:expr
-		
-		$(,$a:expr
-		$(,$b:expr
-		$(,$c:expr
-		$(,$d:expr
-		$(,$e:expr
-		$(,$f:expr
-		)?)?)?)?)?)?
-		$(,)?
-	) => {
-		{
-			Error::catch(
-				l1::syscall!(
-					$number,
-					$($a,
-					$($b,
-					$($c,
-					$($d,
-					$($e,
-					$($f,
-					)?)?)?)?)?)?
-				)
-			)
-		}
-	}
+pub fn pause() -> () {
+	l2::pause();
 }
 
-pub struct WouldBlock<F>(pub F);
-
-impl<F, T> Future for WouldBlock<F>
-where
-	F: FnMut() -> Result<T, Error>,
-{
-	type Output = Result<T, Error>;
-
-	fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
-		let this = unsafe { self.get_unchecked_mut() };
-		match (this.0)() {
-			Err(Error::AGAIN) => Poll::Pending,
-			other => Poll::Ready(other),
-		}
-	}
+pub fn scheduler_yield() -> () {
+	l2::scheduler_yield();
 }
 
-#[macro_export] macro_rules! would_block {
-    ($expr:expr) => {
-		{
-			$crate::l3::WouldBlock(|| { $expr })
-		}
-    };
-}
-
-pub use would_block;
-
-/*
-#[repr(u16)]
-pub enum Error {
-	Perm = 1,
-	NoEnt = 2,
-	Search = 3,
-	Interrupt = 4,
-	Again = 11,
-}
-*/
-
-#[derive(Debug, PartialEq)]
-pub struct Error {
-	value: u16,
-}
-
-impl Error {
-
-	pub const PERM: Self = Self { value: 1 };
-	pub const NO_ENT: Self = Self { value: 2 };
-	pub const SEARCH: Self = Self { value: 3 };
-	pub const INTR: Self = Self { value: 4 };
-	pub const AGAIN: Self = Self { value: 11 };
-
-
-	fn catch(value: long) -> Result<usize, Self> {
-
-		match value {
-			-0xfff..0 => Err(Self { value: -value as u16 }),
-			_ => Ok(value as _),
-		}
-	}
-}
-
-#[repr(C)]
-pub struct OpenHow {
-	flags: u64,
-	mode: u64,
-	resolve: u64,
-}
-
-impl OpenHow {
-	
-	fn new() -> Self {
-		Self {
-			flags: 0,
-			mode: 0,
-			resolve: 0,
-		}
-	}
-
-	fn read_only(mut self) -> Self {
-		self.flags |= libc::O_RDONLY as u64;
-		self
-	}
-}
-
-pub enum AddressFamily {
-	IPV4 = 2,
-	IPV6 = 10,
-}
-
-pub enum Semantic {
-	Stream = 1,
-	Datagram = 2,
-}
-
-pub enum Level {
-	Socket = 1,
-	ProtocolIP6 = 41,
-}
-
-#[repr(C)]
-pub struct SocketIPV6 {
-	family: sa_family_t,
-	port: in_port_t,
-	flowinfo: u32,
-	address: in6_addr,
-	scope_id: u32,
-}
-
-pub enum ShutdownHow {
-	Read = 0,
-	Write = 1,
-	ReadWrite = 2,
-}
-
-pub struct File {
-	desc: int,
-}
-
-pub struct Connection {
-	pub socket: File,
-	pub endpoint: SocketIPV6,
-}
-
-impl File {
-
-	pub fn socket(
-		family: AddressFamily,
-		semantic: int,
-	) -> Result<Self, Error> {
-
-		let value = unsafe {
-			syscall!(
-				Sys::Socket,
-				family as int,
-				semantic,
-				0 as int,
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(value) => Ok(Self { desc: value as _}),
-		}
-	}
-
-	pub fn set_socket_option<T>(
-		&self,
-		level: Level,
-		name: int,
-		value: &T,
-	) -> Result<int, Error> {
-
-		let value = unsafe {
-			syscall!(
-				Sys::SetSocketOption,
-				self.desc,
-				level as int,
-				name as int,
-				value as *const _,
-				core::mem::size_of::<T>(),
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(value) => Ok(value as _),
-		}
-	}
-
-	pub fn bind<T>(
-		&self,
-		endpoint: &T,
-	) -> Result<(), Error> {
-
-		let value = unsafe {
-			syscall!(
-				Sys::Bind,
-				self.desc,
-				endpoint,
-				core::mem::size_of_val(endpoint),
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(_) => Ok(()),
-		}
-	}
-
-	pub fn accept<T>(
-		&self,
-		endpoint: Option<&mut T>,
-		flags: int,
-	) -> Result<Self, Error> {
-
-		let (endpoint, mut length) = if let Some(endpoint) = endpoint {
-			(endpoint as *mut T, core::mem::size_of_val(&endpoint))
-		} else {
-			(core::ptr::null_mut(), 0)
-		};
-
-		let value = unsafe {
-			syscall!(
-				Sys::Accept,
-				self.desc,
-				endpoint,
-				&mut length,
-				flags,
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(value) => Ok(Self { desc: value as _}),
-		}
-	}
-
-
-	pub fn accept_all(
-		&self,
-		flags: int,
-	) -> Result<Connection, Error> {
-		
-		let mut endpoint = std::mem::MaybeUninit::<SocketIPV6>::uninit();
-		let mut length = std::mem::size_of_val(&endpoint);
-
-		let value = unsafe {
-			syscall!(
-				Sys::Accept,
-				self.desc,
-				&mut endpoint,
-				&mut length,
-				flags,
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(value) => Ok(
-				Connection {
-					socket: Self { desc: value as _ },
-					endpoint: unsafe { endpoint.assume_init() },
-				}
-			),
-		}
-	}
-
-	pub fn listen(
-		&self,
-		backlog: uint,
-	) -> Result<(), Error> {
-
-		let value = unsafe {
-			syscall!(
-				Sys::Listen,
-				self.desc,
-				backlog,
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(_) => Ok(()),
-		}
-	}
-
-	pub fn shutdown(&self, how: ShutdownHow) -> Result<(), Error> {
-
-		let value = unsafe {
-				syscall!(
-				Sys::Shutdown,
-				how as int,
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(_) => Ok(()),
-		}
-	}
-
-	pub fn openat2(
-		directory: File,
-		path: *const char,
-		how: &OpenHow,
-	) -> Result<Self, Error> {
-		
-		let value = unsafe {
-			syscall!(
-				Sys::OpenAt2,
-				directory.desc,
-				path,
-				how,
-				core::mem::size_of_val(&how),
-			)
-		};
-
-		match value {
-			Err(value) => Err(value),
-			Ok(value) => Ok(Self { desc: value as _}),
-		}
-	}
-
-	pub fn read(&self, buffer: &mut [u8]) -> Result<usize, Error> {
-	
-		unsafe {
-			syscall!(
-				Sys::Read,
-				self.desc,
-				buffer.as_mut_ptr(),
-				buffer.len(),
-			)
-		}
-	}
-
-	pub fn write(&self, data: &[u8]) -> Result<usize, Error> {
-
-		unsafe {
-			syscall!(
-				Sys::Write,
-				self.desc,
-				data.as_ptr(),
-				data.len(),
-			)
-		}
-	}
-
-
-	pub fn ipv6_only(&self, value: bool) -> Result<(), Error> {
-
-		let value = self.set_socket_option(
-			Level::ProtocolIP6,
-			libc::IPV6_V6ONLY,
-			&(value as int),
-		);
-
-		match value {
-			Err(value) => Err(value),
-			Ok(_) => Ok(()),
-		}
-	}
-
-	pub fn reuse_address(&self, value: bool) -> Result<(), Error> {
-
-		let value = self.set_socket_option(
-			Level::Socket,
-			libc::SO_REUSEADDR,
-			&(value as int),
-		);
-
-		match value {
-			Err(value) => Err(value),
-			Ok(_) => Ok(()),
-		}
-	}
-}
-
-
-
-impl Drop for File {
-	fn drop(&mut self) {
-		let _ = unsafe {
-			syscall!(
-				Sys::Close,
-				self.desc,
-			)
-		};
-	}
-}
-
-static STDIN: File = File { desc: 0 };
-static STDOUT: File = File { desc: 1 };
-static STDERR: File = File { desc: 2 };
-
-static CWD: File = File { desc: -100 };
-
-
-pub fn get_pid() -> long {
-	unsafe { l1::syscall!(Sys::GetProcessId) }
+pub fn get_process_id() -> ProcessId {
+	ProcessId { value: l2::get_process_id().value as _ }
 }
 
 pub fn exit(status: u8) -> ! {
-	unsafe { l1::syscall!(Sys::Exit, status as int) };
-	unsafe { core::hint::unreachable_unchecked() }
-}
-
-
-struct Memory {
-	pointer: *mut (),
-}
-
-impl Memory {
-
-	fn new(
-		suggestion: Option<&[char]>,
-		protocol: int,
-		flags: int,
-		fd: int,
-		offset: off_t,
-	) -> Self {
-		todo!()
+	unsafe {
+		l2::exit(status as _);
+		core::hint::unreachable_unchecked()
 	}
 }
 
-impl Drop for Memory {
-	fn drop(&mut self) {
-		todo!()
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct FileDesc {
+	pub raw: l2::RawFd,
+}
+
+impl FileDesc {
+
+	pub fn openat2(
+		dir_file_desc: FileDesc,
+		filename: &CStr,
+		open_how: OpenHow,
+	) -> Result<Self, Error> {
+		unsafe {
+			l2::openat2(
+				dir_file_desc.raw,
+				filename.as_ptr() as _,
+				&open_how,
+				core::mem::size_of_val(&open_how),
+			).catch()
+		}.map(|value| Self { raw: value as _ })
+	}
+
+	pub fn long_seek(
+		&self,
+		offset: isize,
+		whence: Seek,
+	) -> Result<isize, Error> {
+		unsafe {
+			l2::long_seek(
+				self.raw,
+				offset as _,
+				whence as _,
+			).catch()
+		}.map(|value| value as isize)
+	}
+
+	pub fn open(
+		filename: &CStr,
+		flags: OpenFlags,
+		mode: u32,
+	) -> Result<FileDesc, Error> {
+		unsafe {
+			l2::open(
+				filename.as_ptr(),
+				flags.raw,
+				mode,
+			).catch()
+		}.map(|value| Self { raw: value as _ })
+	}
+
+	pub fn read(&self, buffer: &mut [u8]) -> Result<usize, Error> {
+		unsafe {
+			l2::read(
+				self.raw,
+				buffer.as_mut_ptr(),
+				buffer.len(),
+			).catch()
+		}.map(|value| value as usize)
+	}
+
+	pub fn write(&self, data: &[u8]) -> Result<usize, Error> {
+		unsafe {
+			l2::write(
+				self.raw,
+				data.as_ptr(),
+				data.len(),
+			).catch()
+		}.map(|value| value as usize)
+	}
+
+	pub fn socket(
+		domain: AddressFamily,
+		semantics: ProtocolSemantic,
+		protocol: c_int,
+	) -> Result<Self, Error> {
+		unsafe {
+			l2::socket(
+				domain as _,
+				semantics as _,
+				protocol,
+			).catch()
+		}.map(|value| Self { raw: value as _ })
+	}
+
+	
+	pub fn accept(
+		&self,
+	) -> Result<(Self, libc::sockaddr), Error> {
+
+		let endpoint = libc::sockaddr {
+			sa_family: AddressFamily::IPV6,
+			sa_data: [0; 14],
+		};
+		let length = core::mem::size_of_val(&endpoint);
+
+		unsafe {
+			l2::accept(
+				self.raw,
+				endpoint as *mut libc::sockaddr,
+				&mut length,
+			).catch()
+		}.map(|value| (Self { raw: value as _}, endpoint))
 	}
 }
 
+pub static STD_INPUT: FileDesc = FileDesc { raw: 0 };
+pub static STD_OUTPUT: FileDesc = FileDesc { raw: 1 };
+pub static STD_ERROR: FileDesc = FileDesc { raw: 2 };
+pub static CURRENT_WORKING_DIRECTORY: FileDesc = FileDesc { raw: -100 };
