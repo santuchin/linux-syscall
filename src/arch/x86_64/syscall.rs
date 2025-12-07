@@ -3,9 +3,9 @@
 #[macro_export] macro_rules! syscall {
 
 	(
-		$number:expr
-		
-		$(,$a:expr
+		$number:expr,
+		(	
+		$($a:expr
 		$(,$b:expr
 		$(,$c:expr
 		$(,$d:expr
@@ -13,16 +13,16 @@
 		$(,$f:expr
 		)?)?)?)?)?)?
 		$(,)?
+		)
+		$(,)?
 	) => {
 		{
-			use core::ffi::c_long;
-
-			let value: c_long;
+			let result: $crate::types::c_long;
 
 			core::arch::asm!(
 				"syscall",
 				
-				in("rax") ($number) as c_long,
+				in("rax") ($number),
 				
 				$(in("rdi") ($a),
 				$(in("rsi") ($b),
@@ -32,17 +32,16 @@
 				$(in("r9")  ($f),
 				)?)?)?)?)?)?
 
-				lateout("rax") value,
+				lateout("rax") result,
 				lateout("rcx") _,
 				lateout("r11") _,
 
 				options(nostack),
 			);
 
-			value
+			result
 		}
 	}
 }
 
-pub use syscall;
 

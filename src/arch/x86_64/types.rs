@@ -1,156 +1,165 @@
 
-use core::ffi::{
-	c_int,
-};
+pub type c_void = core::ffi::c_void;
 
-#[derive(Debug, Clone)]
+pub type c_schar = i8;
+pub type c_uchar = u8;
+pub type c_char = c_uchar; // since linux 6.2, it is compiled with -funsigned-char flag
+
+pub type c_short = i16;
+pub type c_ushort = u16;
+
+pub type c_int = i32;
+pub type c_uint = u32;
+
+pub type c_long = i64;
+pub type c_ulong = u64;
+
+pub type c_longlong = i64;
+pub type c_ulonglong = u64;
+
+pub type size_t = usize;
+pub type ssize_t = isize;
+
+pub type off_t = c_long;
+
+pub type mode_t = c_ushort;
+
+pub type pid_t = c_int;
+
+pub type socklen_t = c_uint;
+
+pub type sa_family_t = c_ushort;
+
+pub type __u64 = u64;
+pub type __u32 = u32;
+
 #[repr(C)]
-pub struct OpenHow {
-	pub flags: u64,
-	pub mode: u64,
-	pub resolve: u64,
+pub struct open_how {
+	pub flags: __u64,
+	pub mode: __u64,
+	pub resolve: __u64,
 }
 
-/*
-
-#define RESOLVE_NO_XDEV		0x01 /* Block mount-point crossings
-					(includes bind-mounts). */
-#define RESOLVE_NO_MAGICLINKS	0x02 /* Block traversal through procfs-style
-					"magic-links". */
-#define RESOLVE_NO_SYMLINKS	0x04 /* Block traversal through all symlinks
-					(implies OEXT_NO_MAGICLINKS) */
-#define RESOLVE_BENEATH		0x08 /* Block "lexical" trickery like
-					"..", symlinks, and absolute
-					paths which escape the dirfd. */
-#define RESOLVE_IN_ROOT		0x10 /* Make all jumps to "/" and ".."
-					be scoped inside the dirfd
-					(similar to chroot(2)). */
-#define RESOLVE_CACHED		0x20
-
-*/
-
-impl OpenHow {
-
-	pub fn new() -> Self {
-		Self {
-			flags: 0,
-			mode: 0,
-			resolve: 0,
-		}
-	}
-	
-	pub fn resolve_no_xdev(mut self) -> Self {
-		self.resolve |= 0b1; self
-	}
-
-	pub fn resolve_no_magic_links(mut self) -> Self {
-		self.resolve |= 0b10; self
-	}
-
-	pub fn resolve_no_sym_links(mut self) -> Self {
-		self.resolve |= 0b100; self
-	}
-
-	pub fn resolve_beneath(mut self) -> Self {
-		self.resolve |= 0b1000; self
-	}
-
-	pub fn resolve_in_root(mut self) -> Self {
-		self.resolve |= 0b1_0000; self
-	}
-
-	pub fn resolve_cached(mut self) -> Self {
-		self.resolve |= 0b10_0000; self
-	}
-
-}
-
-#[derive(Debug, Clone)]
-#[repr(transparent)]
-pub struct ProcessId {
-	pub value: c_int,
+#[repr(C)]
+pub struct sockaddr {
+	pub sa_family: sa_family_t,
+	pub sa_data: [c_char; 14],
 }
 
 
-#[derive(Debug, Clone)]
-#[repr(transparent)]
-pub struct OpenFlags {
-	pub raw: c_int,
-}
 
-impl OpenFlags {
 
-	pub fn new() -> Self {
-		Self {
-			raw: 0
-		}
-	}
-
-	pub fn read_only(mut self) -> Self {
-		self.raw |= libc::O_RDONLY; self
-	}
-
-	pub fn write_only(mut self) -> Self {
-		self.raw |= libc::O_WRONLY; self
-	}
-
-	pub fn read_write(mut self) -> Self {
-		self.raw |= libc::O_RDWR; self
-	}
-}
-
-pub enum Seek {
-	Start = 0,
-	Current = 1,
-	End = 2,
-	NextData = 3,
-	NextHole = 4
-}
-
-pub enum AddressFamily {
-	IPV4 = 2,
-	IPV6 = 10,
-	Packet = 17,
-}
-
-pub enum ProtocolSemantic {
-	Stream = 1,
-	Datagram = 2,
-	Raw = 3,
-	ReliableDatagram = 4,
-	SequencedPacket = 5,
-	DatagramCongestionControlProtocol = 6,
-	Packet = 10,
-}
 
 
 #[repr(C)]
-pub struct SocketAddressIPV6 {
-	pub port: u16, // big-endian
-	pub flowinfo: u32, // big-endian
-	pub address: [u8; 16],
-	pub scope_id: u32,
+#[derive(Clone, Copy, Debug, Default)]
+pub struct io_uring_params {
+    pub sq_entries: __u32,
+    pub cq_entries: __u32,
+    pub flags: __u32,
+    pub sq_thread_cpu: __u32,
+    pub sq_thread_idle: __u32,
+    pub features: __u32,
+    pub wq_fd: __u32,
+    pub resv: [__u32; 3usize],
+    pub sq_off: io_sqring_offsets,
+    pub cq_off: io_cqring_offsets,
 }
 
-pub enum SocketAddress {
-	//IPV4(SocketAddressIPV4),
-	IPV6(SocketAddressIPV6),
-	//Unix(SocketAddressUnix),
-	//Packet(SocketAddressPacket),
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct io_sqring_offsets {
+    pub head: __u32,
+    pub tail: __u32,
+    pub ring_mask: __u32,
+    pub ring_entries: __u32,
+    pub flags: __u32,
+    pub dropped: __u32,
+    pub array: __u32,
+    pub resv1: __u32,
+    pub resv2: __u64,
 }
 
-/*
-SOCK_STREAM → conexión orientada a flujo (TCP)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct io_cqring_offsets {
+    pub head: __u32,
+    pub tail: __u32,
+    pub ring_mask: __u32,
+    pub ring_entries: __u32,
+    pub overflow: __u32,
+    pub cqes: __u32,
+    pub resv1: __u64,
+    pub resv2: __u64,
+}
 
-SOCK_DGRAM → datagramas sin conexión (UDP)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct io_uring_cqe {
+	pub user_data: u64,
+	pub res: i32,
+	pub flags: u32,
+	pub big_cqe: *mut u64,
+}
 
-SOCK_RAW → acceso directo a IP
 
-SOCK_RDM → Reliable Datagram, raramente usado
 
-SOCK_SEQPACKET → paquete secuenciado y fiable
+#[derive(Debug, Clone)]
+pub struct stat {
+    // TODO
+}
 
-SOCK_DCCP → Datagram Congestion Control Protocol
+#[derive(Debug, Clone)]
+pub struct rusage {
+    // TODO
+}
 
-SOCK_PACKET
-*/
+
+
+pub type __u8  = u8;
+pub type __u16 = u16;
+pub type __s32 = i32;
+pub type __kernel_rwf_t = u32;
+
+#[repr(C)]
+pub union io_uring_sqe_flags_union {
+    pub rw_flags: __kernel_rwf_t,
+    pub fsync_flags: __u32,
+    pub poll_events: __u16,
+    pub sync_range_flags: __u32,
+    pub msg_flags: __u32,
+    pub timeout_flags: __u32,
+    pub accept_flags: __u32,
+    pub cancel_flags: __u32,
+    pub open_flags: __u32,
+    pub statx_flags: __u32,
+    pub fadvise_advice: __u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct io_uring_sqe_buf_union {
+    pub buf_index: __u16,
+    pub personality: __u16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union io_uring_sqe_union {
+    pub buf: io_uring_sqe_buf_union,
+    pub __pad2: [__u64; 3],
+}
+
+#[repr(C)]
+pub struct io_uring_sqe {
+    pub opcode: __u8,
+    pub flags: __u8,
+    pub ioprio: __u16,
+    pub fd: __s32,
+    pub off: __u64,
+    pub addr: __u64,
+    pub len: __u32,
+    pub union1: io_uring_sqe_flags_union,
+    pub user_data: __u64,
+    pub u: io_uring_sqe_union,
+}
